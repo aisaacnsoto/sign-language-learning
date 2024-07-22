@@ -3,6 +3,9 @@ import { BrowserModule } from '@angular/platform-browser';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
+import { HandDetectionService } from './services/hand-detection.service';
+import { WebcamService } from './services/webcam.service';
+import { SignClassificationService } from './services/sign-classification.service';
 
 @NgModule({
   declarations: [
@@ -12,7 +15,7 @@ import { AppComponent } from './app.component';
     BrowserModule,
     AppRoutingModule
   ],
-  providers: [],
+  providers: [WebcamService, SignClassificationService, HandDetectionService],
   bootstrap: [AppComponent]
 })
 export class AppModule { }
