@@ -1,0 +1,19 @@
+<div class="app-container">
+    <header class="app-header">
+        <h1>Teachable Machine</h1>
+    </header>
+    <main class="app-main">
+        <div class="class-container">
+            <input type="text" id="new-class-name" placeholder="Enter class name">
+            <button id="add-class-btn">Add Class</button>
+        </div>
+        <div id="class-list" class="class-list">
+            <div class="class-card" *ngFor="let item of dataset">
+                <div class="class-header">
+                    <h2>{{item.label}}</h2><span class="photo-count">{{item.imagesCount}} photos</span><button><a [routerLink]="'/training-step2/'+item.index">Ver</a></button>
+                </div>
+                <div class="photo-container"><img [src]="image" *ngFor="let image of item.images"></div>
+            </div>
+        </div>
+    </main>
+</div>

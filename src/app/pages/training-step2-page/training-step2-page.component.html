@@ -1,0 +1,10 @@
+<video id="webcam" autoplay></video>
+<canvas class="output_canvas" id="output_canvas" style="position: absolute; left: 0px; top: 0px;"></canvas>
+
+<button id="enableCam">Enable Webcam</button>
+<button id="dataCollector">Collect data</button>
+<button id="train">Train &amp; Predict!</button>
+<button id="reset">Reset</button>
+<button id="download">Descargar modelo</button>
+
+<div class="photo-container"><img [src]="image" *ngFor="let image of item.images"></div>

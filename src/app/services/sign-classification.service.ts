@@ -1,29 +1,30 @@
 import { Injectable } from '@angular/core';
 import * as tf from '@tensorflow/tfjs';
+import { DatasetService } from './dataset.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SignClassificationService {
 
+  private mobilenet: tf.GraphModel;
   private model: tf.Sequential;
 
   private collectingData: boolean;
   private predicting: boolean;
-  private CLASS_NAMES = [];
-  private canvasElement: HTMLCanvasElement;
-  private classNumber: number;
 
-  private mobilenet: tf.GraphModel = undefined;
+  private canvasElement: HTMLCanvasElement;
+  private index: number;
+  
   private MOBILE_NET_INPUT_WIDTH = 224;
   private MOBILE_NET_INPUT_HEIGHT = 224;
-  //gatherDataState = this.STOP_DATA_GATHER;
-
+  
+  //private CLASS_NAMES = [];
   private trainingDataInputs = [];
   private trainingDataOutputs = [];
-  private examplesCount = [];
+  //private examplesCount = [];
 
-  constructor() {
+  constructor(private datasetService: DatasetService) {
     this.loadMobileNetFeatureModel();
     
   }
@@ -47,13 +48,13 @@ export class SignClassificationService {
   private constructModel() {
     this.model = tf.sequential();
     this.model.add(tf.layers.dense({ inputShape: [1024], units: 128, activation: 'relu' }));
-    this.model.add(tf.layers.dense({ units: this.CLASS_NAMES.length, activation: 'softmax' }));
+    this.model.add(tf.layers.dense({ units: this.datasetService.getItems().length, activation: 'softmax' }));
 
     this.model.summary();
 
     this.model.compile({
       optimizer: 'adam',
-      loss: (this.CLASS_NAMES.length === 2) ? 'binaryCrossentropy' : 'categoricalCrossentropy',
+      loss: (this.datasetService.getItems().length === 2) ? 'binaryCrossentropy' : 'categoricalCrossentropy',
       metrics: ['accuracy']
     });
   }
@@ -64,7 +65,7 @@ export class SignClassificationService {
     tf.util.shuffleCombo(this.trainingDataInputs, this.trainingDataOutputs);
 
     let outputsAsTensor = tf.tensor1d(this.trainingDataOutputs, 'int32');
-    let oneHotOutputs = tf.oneHot(outputsAsTensor, this.CLASS_NAMES.length);
+    let oneHotOutputs = tf.oneHot(outputsAsTensor, this.datasetService.getItems().length);
     let inputsAsTensor = tf.stack(this.trainingDataInputs);
 
     let results = await this.model.fit(inputsAsTensor, oneHotOutputs, {
@@ -99,15 +100,20 @@ export class SignClassificationService {
         let prediction = modelPredict.squeeze();
         let highestIndex = prediction.argMax().arraySync();
         let predictionArray = prediction.arraySync();
-        let text = 'Prediction: ' + this.CLASS_NAMES[highestIndex] + ' with ' + Math.floor(predictionArray[highestIndex] * 100) + '% confidence';
+        let datasetItem = this.datasetService.getItem(highestIndex);
+        let text = 'Prediction: ' + datasetItem.label + ' with ' + Math.floor(predictionArray[highestIndex] * 100) + '% confidence';
         console.log(text);
       });
       window.requestAnimationFrame(this.predictionLoop);
     }
   }
 
-  private calculateFeaturesOnCurrentFrame() {
+  private calculateFeaturesOnCurrentFrame(saveImage: boolean = false) {
     return tf.tidy(() => {
+      if (saveImage) {
+        let dataURL = this.canvasElement.toDataURL('image/jpeg');
+        this.datasetService.addImageItem(this.index, dataURL);
+      }
       let videoFrameAsTensor = tf.browser.fromPixels(this.canvasElement);
       let resizedTensorFrame = tf.image.resizeBilinear(
         videoFrameAsTensor,
@@ -122,11 +128,11 @@ export class SignClassificationService {
     });
   }
 
-  startDataCollection(classNumber: number) {
+  startDataCollection(index: number) {
     if (!this.collectingData) {
       console.log('iniciando recolección de datos');
       this.collectingData = true;
-      this.classNumber = classNumber;
+      this.index = index;
 
       this._dataCollectionLoop();
     }
@@ -134,19 +140,15 @@ export class SignClassificationService {
 
   private _dataCollectionLoop = () => {
     if (this.collectingData) {
-      let imageFeatures = this.calculateFeaturesOnCurrentFrame();
+      let imageFeatures = this.calculateFeaturesOnCurrentFrame(true);
 
       this.trainingDataInputs.push(imageFeatures);
-      this.trainingDataOutputs.push(this.classNumber);
-
-      if (this.examplesCount[this.classNumber] === undefined) {
-        this.examplesCount[this.classNumber] = 0;
-      }
-      this.examplesCount[this.classNumber]++;
+      this.trainingDataOutputs.push(this.index);
 
       let text = '';
-      for (let n = 0; n < this.CLASS_NAMES.length; n++) {
-        text += this.CLASS_NAMES[n] + ' data count: ' + this.examplesCount[n] + '. ';
+      for (let n = 0; n < this.datasetService.getItems().length; n++) {
+        let datasetItem = this.datasetService.getItem(n);
+        text += datasetItem.label + ' data count: ' + datasetItem.imagesCount + '. ';
       }
       console.log(text);
 
@@ -161,7 +163,7 @@ export class SignClassificationService {
   reset() {
     this.collectingData = false;
     this.predicting = false;
-    this.examplesCount.splice(0);
+    this.datasetService.clearItems();
     for (let i = 0; i < this.trainingDataInputs.length; i++) {
       this.trainingDataInputs[i].dispose();
     }
@@ -172,8 +174,10 @@ export class SignClassificationService {
     console.log('Tensors in memory: ' + tf.memory().numTensors);
   }
 
-  addClass(className: string) {
-    this.CLASS_NAMES.push(className);
+  async save(modelName: string) {
+    let url = 'downloads://' + modelName;
+    const saveResults = await this.model.save(url);
+    return url;
   }
 
 }
